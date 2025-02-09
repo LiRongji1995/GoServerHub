@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gocolly/colly"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -41,8 +42,22 @@ func main() {
 	// Set request timeout to prevent freezing
 	c.SetRequestTimeout(60 * time.Second)
 
-	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+	// Define a list of common User-Agent strings to avoid detection
+	userAgents := []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36",
+	}
 
+	// Seed the random number generator to ensure different User-Agents are used
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Set a random User-Agent for each request
+	c.OnRequest(func(r *colly.Request) {
+		randomUserAgent := userAgents[rng.Intn(len(userAgents))] // Select a random User-Agent
+		r.Headers.Set("User-Agent", randomUserAgent)             // Apply the User-Agent to the request
+		fmt.Println("Using User-Agent:", randomUserAgent)        // Print the selected User-Agent
+	})
 	// Store crawl results
 	var results []PageData
 
@@ -55,14 +70,36 @@ func main() {
 		//Iterate through all <a> tags to get links
 		e.ForEach("a", func(_ int, el *colly.HTMLElement) {
 			link := el.Attr("href")
-			if link == "" || strings.HasPrefix(link, "#") ||
-				strings.HasPrefix(link, "tel:") || strings.HasPrefix(link, "mailto:") {
-				return // Skip invalid links
+
+			// Skip invalid links
+			if link == "" ||
+				strings.HasPrefix(link, "#") ||
+				strings.HasPrefix(link, "tel:") ||
+				strings.HasPrefix(link, "mailto:") ||
+				strings.HasPrefix(link, "javascript:") ||
+				strings.HasPrefix(link, "about:") {
+				return // Ignore invalid links
 			}
 
-			absoluteURL := e.Request.AbsoluteURL(link) // Convert to absolute URL
-			if absoluteURL == "" {
-				fmt.Println("Skipping invalid URL:", link)
+			absoluteURL := e.Request.AbsoluteURL(link)
+			if absoluteURL == "" || !strings.HasPrefix(absoluteURL, "http") {
+				return // Skip empty or non-HTTP URLs
+			}
+
+			// Skip logout and authentication-related URLs
+			if strings.Contains(absoluteURL, "logout") ||
+				strings.Contains(absoluteURL, "signout") ||
+				strings.Contains(absoluteURL, "session_end") ||
+				strings.Contains(absoluteURL, "authorize") ||
+				strings.Contains(absoluteURL, "redirect_uri") ||
+				strings.Contains(absoluteURL, "oauth") {
+				fmt.Println("Skipping authentication/logout URL:", absoluteURL)
+				return
+			}
+
+			// Skip blocked or unresponsive sites
+			if strings.Contains(absoluteURL, "x.com") {
+				fmt.Println("Skipping restricted site:", absoluteURL)
 				return
 			}
 
@@ -70,6 +107,9 @@ func main() {
 				fmt.Println("Failed to visit link:", err)
 			}
 		})
+
+		// Set timeout to prevent handshake failures
+		c.SetRequestTimeout(60 * time.Second)
 
 		//store the result
 		results = append(results, page)
