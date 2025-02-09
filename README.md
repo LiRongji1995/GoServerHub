@@ -1,8 +1,6 @@
 # GoServerHub
 Go 服务器开发的 "Hub"，聚合各种服务器项目
 
-# Golang 服务器项目自学指南
-
 ## 1. Web 服务 / API 服务器
 
 适合入门 & 进阶开发。
