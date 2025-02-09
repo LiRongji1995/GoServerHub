@@ -40,7 +40,9 @@ func main() {
 			if link != "" && !strings.HasPrefix(link, "#") { //Filter out invalid links
 				page.Links = append(page.Links, link)
 				// If a new link is found, add it to the crawl queue
-				c.Visit(e.Request.AbsoluteURL(link))
+				if err := c.Visit(e.Request.AbsoluteURL(link)); err != nil {
+					fmt.Println("访问链接失败：", err)
+				}
 			}
 		})
 
@@ -59,16 +61,25 @@ func main() {
 		if err != nil {
 			log.Fatal("无法创建JSON文件：", err) // Print error if file creation fails
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.Fatal("无法关闭文件", err)
+			}
+		}()
 
 		jsonData, _ := json.MarshalIndent(results, "", "  ") //Format JSON
-		file.Write(jsonData)                                 //Write to file
-		fmt.Println("数据已保存到 data.Json")                      // Print success message
+		write, err := file.Write(jsonData)                   //Write to file
+		if err != nil {
+			log.Fatal("写入文件失败：", err)
+		}
+		fmt.Printf("写入 %d 字节\n", write)
+		fmt.Println("数据已保存到 data.Json") // Print success message
 	})
 
 	//Start crawling
 	startURL := "https://example.com"
 	fmt.Println("开始爬取:", startURL) //Print start message
-	c.Visit(startURL)
-
+	if err := c.Visit(startURL); err != nil {
+		fmt.Println("访问链接失败：", err)
+	}
 }
