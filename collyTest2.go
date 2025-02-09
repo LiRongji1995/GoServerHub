@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 // PageData Define a data structure to store webpage information
@@ -19,30 +20,54 @@ type PageData struct {
 func main() {
 	// Create a Colly crawler instance
 	c := colly.NewCollector(
-		colly.AllowedDomains("example.com"),
+		//colly.AllowedDomains("example.com"),
 		colly.MaxDepth(2),
+		colly.AllowURLRevisit(), //Enables revisiting previously visited URLs instead of skipping them
 	)
+
+	// Create a map to store visited URLs to avoid duplicates
+	visited := make(map[string]bool)
+
+	// Prevent duplicate visits by checking if a URL has already been visited
+	c.OnRequest(func(r *colly.Request) {
+		if visited[r.URL.String()] {
+			fmt.Println("Skipping already visited URL:", r.URL.String())
+			r.Abort() // Cancel the request to prevent duplicate crawling
+			return
+		}
+		visited[r.URL.String()] = true
+	})
+
 	// Set request timeout to prevent freezing
-	c.SetRequestTimeout(10)
+	c.SetRequestTimeout(60 * time.Second)
+
+	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
 
 	// Store crawl results
 	var results []PageData
 
 	c.OnHTML("html", func(e *colly.HTMLElement) {
 		page := PageData{
-			Title:   e.ChildText("title"),                //Get page title
-			Content: strings.TrimSpace(e.ChildText("p")), //Extract main content
+			Title:   e.ChildText("title"),                // Get page title
+			Content: strings.TrimSpace(e.ChildText("p")), // Extract main content
 		}
 
 		//Iterate through all <a> tags to get links
 		e.ForEach("a", func(_ int, el *colly.HTMLElement) {
-			link := el.Attr("href")                          //Properties of HTML hyperlinks (<a> tags)
-			if link != "" && !strings.HasPrefix(link, "#") { //Filter out invalid links
-				page.Links = append(page.Links, link)
-				// If a new link is found, add it to the crawl queue
-				if err := c.Visit(e.Request.AbsoluteURL(link)); err != nil {
-					fmt.Println("访问链接失败：", err)
-				}
+			link := el.Attr("href")
+			if link == "" || strings.HasPrefix(link, "#") ||
+				strings.HasPrefix(link, "tel:") || strings.HasPrefix(link, "mailto:") {
+				return // Skip invalid links
+			}
+
+			absoluteURL := e.Request.AbsoluteURL(link) // Convert to absolute URL
+			if absoluteURL == "" {
+				fmt.Println("Skipping invalid URL:", link)
+				return
+			}
+
+			if err := c.Visit(absoluteURL); err != nil {
+				fmt.Println("Failed to visit link:", err)
 			}
 		})
 
