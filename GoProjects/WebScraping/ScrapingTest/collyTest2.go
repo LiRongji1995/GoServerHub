@@ -25,6 +25,8 @@ func main() {
 		colly.MaxDepth(2),
 		colly.AllowURLRevisit(), //Enables revisiting previously visited URLs instead of skipping them
 	)
+	// Set timeout to prevent handshake failures
+	c.SetRequestTimeout(60 * time.Second)
 
 	// Create a map to store visited URLs to avoid duplicates
 	visited := make(map[string]bool)
@@ -107,9 +109,6 @@ func main() {
 				fmt.Println("Failed to visit link:", err)
 			}
 		})
-
-		// Set timeout to prevent handshake failures
-		c.SetRequestTimeout(60 * time.Second)
 
 		//store the result
 		results = append(results, page)
