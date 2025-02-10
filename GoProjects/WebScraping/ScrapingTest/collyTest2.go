@@ -41,7 +41,7 @@ func main() {
 
 	c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
-		Parallelism: 2,
+		Parallelism: 10,
 		RandomDelay: 1 * time.Second,
 	})
 
