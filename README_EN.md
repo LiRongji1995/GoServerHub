@@ -1,6 +1,8 @@
 # GoServerHub
 A "Hub" for Go server development, aggregating various server projects.
 
+[Chinese version available here](./README.md)
+
 ## 1. Web Services / API Servers
 
 Suitable for beginners & advanced development.
