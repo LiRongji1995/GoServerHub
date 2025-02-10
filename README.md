@@ -1,6 +1,8 @@
 # GoServerHub
 Go 服务器开发的 "Hub"，聚合各种服务器项目
 
+[English version available here](./GoServerHub_EN.md)
+
 ## 1. Web 服务 / API 服务器
 
 适合入门 & 进阶开发。
