@@ -45,7 +45,6 @@ func main() {
 		RandomDelay: 1 * time.Second,
 	})
 
-	visited := make(map[string]bool)
 	userAgents := []string{
 		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
 		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
@@ -53,12 +52,16 @@ func main() {
 	}
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	var visited sync.Map
+
 	c.OnRequest(func(r *colly.Request) {
-		if visited[r.URL.String()] || r.Depth > 2 {
+		if _, exists := visited.Load(r.URL.String()); exists || r.Depth > 2 {
 			r.Abort()
 			return
 		}
-		visited[r.URL.String()] = true
+		visited.Store(r.URL.String(), true)
+
 		r.Headers.Set("User-Agent", userAgents[rng.Intn(len(userAgents))])
 	})
 
@@ -79,14 +82,19 @@ func main() {
 			if !isValidLink(link) {
 				return
 			}
+
 			absoluteURL := e.Request.AbsoluteURL(link)
 			if absoluteURL == "" || !strings.HasPrefix(absoluteURL, "http") {
 				return
 			}
+
 			if strings.Contains(absoluteURL, "logout") || strings.Contains(absoluteURL, "x.com") {
 				return
 			}
-			if !visited[absoluteURL] {
+
+			// **改这里：使用 sync.Map 代替普通 map**
+			if _, exists := visited.Load(absoluteURL); !exists {
+				visited.Store(absoluteURL, true) // **确保并发安全**
 				if err := c.Visit(absoluteURL); err != nil {
 					log.Println("Failed to visit link:", err)
 				}
