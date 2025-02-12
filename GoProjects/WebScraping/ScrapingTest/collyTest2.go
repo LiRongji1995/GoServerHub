@@ -126,7 +126,7 @@ func main() {
 		log.Println("数据已保存到 data.json")
 	})
 
-	startURL := "https://example.com"
+	startURL := "https://www.zhihu.com/"
 	log.Println("开始爬取:", startURL)
 	if err := c.Visit(startURL); err != nil {
 		log.Println("访问链接失败：", err)
