@@ -45,6 +45,13 @@ func main() {
 	page.MustWaitElementsMoreThan(".articleCard", 1)
 	fmt.Println("📢 开始爬取文章标题和链接...")
 
+	// ✅ 触发滚动加载
+	for i := 0; i < 5; i++ { // 滚动 5 次，加载更多文章
+		page.Eval("() => window.scrollTo(0, document.body.scrollHeight)")
+		time.Sleep(2 * time.Second) // 等待 2 秒，确保新内容加载
+	}
+	fmt.Println("📢 滚动加载完成，开始爬取文章...")
+
 	// ✅ 去重逻辑
 	articles := page.MustElements(".articleCard")
 	uniqueArticles := make(map[string]bool)
