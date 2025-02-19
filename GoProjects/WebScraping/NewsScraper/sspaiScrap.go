@@ -2,99 +2,208 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/proto"
 )
 
-func main() {
-	fmt.Println("🚀 启动 Edge 浏览器...")
-	chromePath := "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+const (
+	maxScrolls      = 5               // 最大滚动次数
+	scrollInterval  = 2 * time.Second // 滚动间隔
+	articleSelector = ".articleCard"  // 文章卡片选择器
+	titleSelector   = ".title"        // 标题选择器
+	outputFileName  = "sspai_articles.txt"
+	targetURL       = "https://sspai.com"
+	edgePath        = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+)
 
-	launchURL := launcher.New().
+type Article struct {
+	Title string
+	Link  string
+}
+
+func main() {
+	browser, cleanup := initBrowser()
+	defer cleanup()
+
+	page := navigatePage(browser, targetURL)
+	performScrolling(page)
+	articles := extractArticles(page)
+	saveArticles(articles)
+}
+
+// 初始化浏览器实例
+func initBrowser() (*rod.Browser, func()) {
+	log.Println("🚀 启动 Edge 浏览器...")
+	launcher := launcher.New().
 		Leakless(false).
 		Headless(false).
-		Bin(chromePath).
-		MustLaunch()
+		Bin(edgePath)
+
+	controlURL, err := launcher.Launch()
+	if err != nil {
+		log.Fatal("❌ 浏览器启动失败:", err)
+	}
 
 	browser := rod.New().
-		ControlURL(launchURL).
+		ControlURL(controlURL).
 		Trace(true).
-		SlowMotion(1 * time.Second).
-		MustConnect()
-	defer browser.MustClose()
+		SlowMotion(1 * time.Second)
 
-	page := browser.MustPage("https://sspai.com")
+	if err := browser.Connect(); err != nil {
+		log.Fatal("❌ 浏览器连接失败:", err)
+	}
 
-	// ✅ 等待页面加载
-	page.MustWaitLoad()
-	fmt.Println("✅ 页面加载完成！")
+	return browser, func() {
+		if err := browser.Close(); err != nil {
+			log.Println("⚠️ 关闭浏览器时出错:", err)
+		}
+	}
+}
 
-	// ✅ 获取网页标题
+// 导航到指定页面
+// 导航到指定页面
+func navigatePage(browser *rod.Browser, url string) *rod.Page {
+	page, err := browser.Page(proto.TargetCreateTarget{URL: url})
+	if err != nil {
+		log.Fatal("❌ 创建页面失败:", err)
+	}
+
+	if err := page.WaitLoad(); err != nil {
+		log.Fatal("❌ 页面加载失败:", err)
+	}
+	log.Println("✅ 页面加载完成！")
+
+	// 使用 Eval 方法获取页面标题
 	title, err := page.Eval("() => document.title")
 	if err != nil {
-		fmt.Println("⚠️ 获取网页标题失败:", err)
+		log.Println("⚠️ 获取页面标题失败:", err)
 	} else {
-		fmt.Println("📌 网页标题:", title)
+		log.Println("📌 网页标题:", title.Value.String())
 	}
+	return page
+}
 
-	// ✅ 等待文章列表加载
-	page.MustWaitElementsMoreThan(".articleCard", 1)
-	fmt.Println("📢 开始爬取文章标题和链接...")
+// 执行滚动加载
+func performScrolling(page *rod.Page) {
+	log.Println("📢 开始滚动加载更多内容...")
 
-	// ✅ 触发滚动加载
-	for i := 0; i < 5; i++ { // 滚动 5 次，加载更多文章
-		page.Eval("() => window.scrollTo(0, document.body.scrollHeight)")
-		time.Sleep(2 * time.Second) // 等待 2 秒，确保新内容加载
-	}
-	fmt.Println("📢 滚动加载完成，开始爬取文章...")
+	scrollScript := "() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })"
 
-	// ✅ 去重逻辑
-	articles := page.MustElements(".articleCard")
-	uniqueArticles := make(map[string]bool)
-	var articleList []string
-
-	for _, article := range articles {
-		// **获取标题**
-		titleElement := article.MustElement(".title")
-		text := strings.TrimSpace(titleElement.MustText())
-		text = strings.ToLower(text)               // **转换为小写，防止相同标题大小写不同**
-		text = strings.ReplaceAll(text, "\n", " ") // **去掉换行，合并标题**
-
-		// **获取文章链接**
-		linkElement, err := article.Element("a")
-		var link string
-		if err == nil {
-			href := linkElement.MustAttribute("href")
-			if href != nil { // **检查指针是否为空**
-				link = *href
-				if !strings.HasPrefix(link, "http") {
-					link = "https://sspai.com" + link
-				}
-			}
+	for i := 0; i < maxScrolls; i++ {
+		if _, err := page.Eval(scrollScript); err != nil {
+			log.Println("⚠️ 滚动操作失败:", err)
+			break
 		}
 
-		// **去重并存储**
-		if text != "" && link != "" && !uniqueArticles[text] {
-			uniqueArticles[text] = true
-			fullEntry := fmt.Sprintf("%s - %s", text, link)
-			fmt.Println("📝 文章:", fullEntry)
-			articleList = append(articleList, fullEntry)
+		// 使用更可靠的等待方式
+		if err := page.WaitIdle(time.Minute); err != nil {
+			log.Println("⚠️ 等待页面空闲失败:", err)
+			break
 		}
+
+		time.Sleep(scrollInterval)
+	}
+	log.Println("✅ 滚动加载完成")
+}
+
+// 提取文章信息
+func extractArticles(page *rod.Page) []Article {
+	elements, err := page.Elements(articleSelector)
+	if err != nil {
+		log.Fatal("❌ 获取文章元素失败:", err)
 	}
 
-	// ✅ 存入文件
-	if len(articleList) > 0 {
-		err := os.WriteFile("sspai_articles.txt", []byte(strings.Join(articleList, "\n")), 0644)
+	unique := make(map[string]struct{})
+	var articles []Article
+
+	for _, el := range elements {
+		article, err := parseArticle(el)
 		if err != nil {
-			fmt.Println("⚠️ 文件写入失败:", err)
-		} else {
-			fmt.Println("✅ 爬取完成，已存入 sspai_articles.txt")
+			log.Println("⚠️ 解析文章失败:", err)
+			continue
 		}
-	} else {
-		fmt.Println("⚠️ 没有找到文章标题，可能选择器不对！")
+
+		key := fmt.Sprintf("%s|%s", article.Title, article.Link)
+		if _, exists := unique[key]; !exists && article.Valid() {
+			unique[key] = struct{}{}
+			articles = append(articles, article)
+			log.Printf("📝 发现文章: %s - %s\n", article.Title, article.Link)
+		}
 	}
+
+	if len(articles) == 0 {
+		log.Println("⚠️ 未找到有效文章，请检查选择器配置")
+	}
+	return articles
+}
+
+// 解析单个文章元素
+func parseArticle(el *rod.Element) (Article, error) {
+	var article Article
+
+	// 获取标题
+	titleEl, err := el.Element(titleSelector)
+	if err != nil {
+		return article, fmt.Errorf("获取标题元素失败: %w", err)
+	}
+	article.Title = processTitle(titleEl.MustText())
+
+	// 获取链接
+	linkEl, err := el.Element("a")
+	if err != nil {
+		return article, fmt.Errorf("获取链接元素失败: %w", err)
+	}
+
+	href, err := linkEl.Attribute("href")
+	if err != nil || href == nil {
+		return article, fmt.Errorf("获取链接地址失败: %w", err)
+	}
+	article.Link = normalizeLink(*href)
+
+	return article, nil
+}
+
+// 处理标题格式
+func processTitle(title string) string {
+	title = strings.TrimSpace(title)
+	title = strings.ToLower(title)
+	return strings.Join(strings.Fields(title), " ") // 处理所有空白字符
+}
+
+// 标准化链接格式
+func normalizeLink(link string) string {
+	if strings.HasPrefix(link, "http") {
+		return link
+	}
+	return strings.TrimSuffix(targetURL, "/") + "/" + strings.TrimPrefix(link, "/")
+}
+
+// 保存文章到文件
+func saveArticles(articles []Article) {
+	if len(articles) == 0 {
+		return
+	}
+
+	var builder strings.Builder
+	for _, a := range articles {
+		builder.WriteString(fmt.Sprintf("%s - %s\n", a.Title, a.Link))
+	}
+
+	if err := os.WriteFile(outputFileName, []byte(builder.String()), 0644); err != nil {
+		log.Fatal("❌ 文件写入失败:", err)
+	}
+	log.Printf("✅ 成功保存 %d 篇文章到 %s", len(articles), outputFileName)
+}
+
+// 校验文章有效性
+func (a Article) Valid() bool {
+	return a.Title != "" && a.Link != "" &&
+		strings.HasPrefix(a.Link, "http") &&
+		!strings.Contains(a.Link, "about:blank")
 }
