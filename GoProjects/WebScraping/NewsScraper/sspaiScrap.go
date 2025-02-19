@@ -10,16 +10,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
-)
-
-const (
-	maxScrolls      = 5               // 最大滚动次数
-	scrollInterval  = 2 * time.Second // 滚动间隔
-	articleSelector = ".articleCard"  // 文章卡片选择器
-	titleSelector   = ".title"        // 标题选择器
-	outputFileName  = "sspai_articles.txt"
-	targetURL       = "https://sspai.com"
-	edgePath        = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+	"github.com/spf13/viper"
 )
 
 type Article struct {
@@ -28,13 +19,27 @@ type Article struct {
 }
 
 func main() {
+	// 初始化配置
+	initConfig()
+
 	browser, cleanup := initBrowser()
 	defer cleanup()
 
-	page := navigatePage(browser, targetURL)
+	page := navigatePage(browser, viper.GetString("targetURL"))
 	performScrolling(page)
 	articles := extractArticles(page)
 	saveArticles(articles)
+}
+
+// 初始化配置
+func initConfig() {
+	viper.SetConfigName("config") // 配置文件名 (不带扩展名)
+	viper.SetConfigType("yaml")   // 配置文件类型
+	viper.AddConfigPath(".")      // 查找配置文件的路径
+
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("❌ 无法读取配置文件: %v", err)
+	}
 }
 
 // 初始化浏览器实例
@@ -43,7 +48,7 @@ func initBrowser() (*rod.Browser, func()) {
 	launcher := launcher.New().
 		Leakless(false).
 		Headless(false).
-		Bin(edgePath)
+		Bin(viper.GetString("edgePath"))
 
 	controlURL, err := launcher.Launch()
 	if err != nil {
@@ -66,7 +71,6 @@ func initBrowser() (*rod.Browser, func()) {
 	}
 }
 
-// 导航到指定页面
 // 导航到指定页面
 func navigatePage(browser *rod.Browser, url string) *rod.Page {
 	page, err := browser.Page(proto.TargetCreateTarget{URL: url})
@@ -95,7 +99,7 @@ func performScrolling(page *rod.Page) {
 
 	scrollScript := "() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })"
 
-	for i := 0; i < maxScrolls; i++ {
+	for i := 0; i < viper.GetInt("maxScrolls"); i++ {
 		if _, err := page.Eval(scrollScript); err != nil {
 			log.Println("⚠️ 滚动操作失败:", err)
 			break
@@ -107,14 +111,14 @@ func performScrolling(page *rod.Page) {
 			break
 		}
 
-		time.Sleep(scrollInterval)
+		time.Sleep(viper.GetDuration("scrollInterval"))
 	}
 	log.Println("✅ 滚动加载完成")
 }
 
 // 提取文章信息
 func extractArticles(page *rod.Page) []Article {
-	elements, err := page.Elements(articleSelector)
+	elements, err := page.Elements(viper.GetString("articleSelector"))
 	if err != nil {
 		log.Fatal("❌ 获取文章元素失败:", err)
 	}
@@ -148,7 +152,7 @@ func parseArticle(el *rod.Element) (Article, error) {
 	var article Article
 
 	// 获取标题
-	titleEl, err := el.Element(titleSelector)
+	titleEl, err := el.Element(viper.GetString("titleSelector"))
 	if err != nil {
 		return article, fmt.Errorf("获取标题元素失败: %w", err)
 	}
@@ -181,7 +185,7 @@ func normalizeLink(link string) string {
 	if strings.HasPrefix(link, "http") {
 		return link
 	}
-	return strings.TrimSuffix(targetURL, "/") + "/" + strings.TrimPrefix(link, "/")
+	return strings.TrimSuffix(viper.GetString("targetURL"), "/") + "/" + strings.TrimPrefix(link, "/")
 }
 
 // 保存文章到文件
@@ -195,10 +199,10 @@ func saveArticles(articles []Article) {
 		builder.WriteString(fmt.Sprintf("%s - %s\n", a.Title, a.Link))
 	}
 
-	if err := os.WriteFile(outputFileName, []byte(builder.String()), 0644); err != nil {
+	if err := os.WriteFile(viper.GetString("outputFileName"), []byte(builder.String()), 0644); err != nil {
 		log.Fatal("❌ 文件写入失败:", err)
 	}
-	log.Printf("✅ 成功保存 %d 篇文章到 %s", len(articles), outputFileName)
+	log.Printf("✅ 成功保存 %d 篇文章到 %s", len(articles), viper.GetString("outputFileName"))
 }
 
 // 校验文章有效性

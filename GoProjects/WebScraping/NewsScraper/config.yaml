@@ -1,0 +1,7 @@
+maxScrolls: 5
+scrollInterval: 2s
+articleSelector: ".articleCard"
+titleSelector: ".title"
+outputFileName: "sspai_articles.txt"
+targetURL: "https://sspai.com"
+edgePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
