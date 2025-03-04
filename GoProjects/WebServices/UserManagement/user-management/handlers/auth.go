@@ -3,19 +3,24 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"user-management/models" // 引入 models 包
 	"user-management/utils"
 )
 
 func Register(w http.ResponseWriter, r *http.Request) {
-	var user User
+	var user models.User // 使用 models.User 类型
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// 验证邮箱格式和密码强度
-	if !utils.ValidateEmail(user.Email) || !utils.ValidatePassword(user.Password) {
-		http.Error(w, "Invalid email or password", http.StatusBadRequest)
+	if !utils.ValidateEmail(user.Email) {
+		http.Error(w, "Invalid email", http.StatusBadRequest)
+		return
+	}
+	if !utils.ValidatePassword(user.Password) {
+		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
 	}
 
@@ -43,7 +48,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 查询用户（这里省略数据库操作）
-	user := User{Email: credentials.Email, Password: "hashed_password_from_db"}
+	user := models.User{Email: credentials.Email, Password: "hashed_password_from_db"} // 使用 models.User 类型
 
 	// 验证密码
 	if !utils.VerifyPassword(user.Password, credentials.Password) {
