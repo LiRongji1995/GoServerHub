@@ -17,7 +17,7 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Path[len("/users/"):]
-	id, err := strconv.Atoi(idStr)
+	_, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
