@@ -1,0 +1,29 @@
+SERVER:
+  PORT: ":8080"
+  READ_TIMEOUT: 5s
+  WRITE_TIMEOUT: 10s
+
+DATABASE:
+  HOST: "localhost"
+  PORT: "5432"
+  USER: "admin"
+  PASSWORD: "password"
+  NAME: "user_management"
+
+SECURITY:
+  HTTPS_ENABLED: true
+  JWT_SECRET_KEY: "supersecretkey"
+  PASSWORD_HASH_COST: 10
+  MFA_ENABLED: true
+  AUDIT_LOG_ENABLED: true
+  PASSWORD_MIN_LENGTH: 8
+
+ROLES:
+  ADMIN: "admin"
+  USER: "user"
+  GUEST: "guest"
+  DEFAULT: "user"
+
+REPORTING:
+  REPORT_INTERVAL: 24h
+  REPORT_PATH: "./reports"

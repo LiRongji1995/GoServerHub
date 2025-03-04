@@ -25,10 +25,16 @@ func main() {
 	browser, cleanup := initBrowser()
 	defer cleanup()
 
-	page := navigatePage(browser, viper.GetString("targetURL"))
-	performScrolling(page)
-	articles := extractArticles(page)
-	saveArticles(articles)
+	for _, url := range viper.GetStringSlice("targetURLs") {
+		page := navigatePage(browser, url)
+		performScrolling(page)
+		articles := extractArticles(page)
+		saveArticles(articles)
+	}
+	//page := navigatePage(browser, viper.GetString("targetURL"))
+	//performScrolling(page)
+	//articles := extractArticles(page)
+	//saveArticles(articles)
 }
 
 // 初始化配置
