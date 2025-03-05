@@ -61,6 +61,7 @@ func LoadConfig(path string) (*Config, error) {
 	return &config, nil
 }
 
+// init 函数在 Go 语言中是一个特殊的函数，它会在包被导入时自动执行，并且在程序运行期间只会执行一次。
 func init() {
 	config, err := LoadConfig(".")
 	if err != nil {
